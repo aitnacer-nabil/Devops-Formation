@@ -12,7 +12,7 @@ Vagrant.configure("2") do |config|
     web.vm.hostname = "web-server"
     
     # Configuration réseau
-    web.vm.network "public_network", bridge: "en0: Wi-Fi (Wireless)"
+    web.vm.network "public_network", bridge: "en0: Intel(R) Wi-Fi 6 AX201 160MHz"
     web.vm.network "private_network", ip: "192.168.56.10"
     
     # Synchronisation des dossiers
@@ -29,7 +29,7 @@ Vagrant.configure("2") do |config|
     end
     
     # Script de provisioning
-    web.vm.provision "shell", path: "scripts/provision-web-ubuntu.sh"
+    web.vm.provision "shell", path: "./scripts/provision-web-ubuntu.sh"
   end
 
   # Machine 2: Database Server (CentOS 9)
@@ -56,6 +56,6 @@ Vagrant.configure("2") do |config|
     end
     
     # Script de provisioning
-    db.vm.provision "shell", path: "scripts/provision-db-centos.sh"
+    db.vm.provision "shell", path: "./scripts/provision-db-centos.sh"
   end
 end
