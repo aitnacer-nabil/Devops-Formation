@@ -5,273 +5,202 @@
 Ce projet implémente une infrastructure automatisée avec deux machines virtuelles :
 - **Web Server** : Ubuntu 22.04 avec Nginx
 - **Database Server** : CentOS 9 avec MySQL 8.0
+# Projet d'infrastructure Vagrant (Web + BDD)
 
-## 📁 Structure du projet
+## 🇫🇷 Description (version professionnelle)
+
+Ce dépôt fournit une infrastructure de démonstration entièrement automatisée avec Vagrant et VirtualBox. Elle contient deux machines virtuelles :
+
+- `web-server` (Ubuntu 22.04) : serveur web (Nginx) qui sert un site statique depuis le dossier partagé `./website`.
+- `db-server` (CentOS 9) : serveur de base de données MySQL 8.0 qui fournit la base `demo_db` et un utilisateur `vagrant` pour les tests.
+
+Les scripts de provisioning fournis (shell) automatisent l'installation et la configuration :
+
+- `scripts/provision-web-ubuntu.sh` : installe Nginx, déploie le contenu du dossier `website`, installe le client MySQL et crée `/home/vagrant/test-db.sh` pour tests simples.
+- `scripts/provision-db-centos.sh` : installe MySQL, gère le mot de passe root (prend en charge le mot de passe temporaire produit par MySQL), crée l'utilisateur `vagrant`, accorde les privilèges, configure `bind-address` pour les connexions privées, importe les fichiers SQL depuis `/tmp/database` (synced folder) et crée `/home/vagrant/test-mysql.sh`.
+
+> Remarque importante : pour que les fichiers SQL soient importés automatiquement, placez `create-table.sql` et `insert-demo-data.sql` dans le dossier `./database` avant d'exécuter `vagrant up`.
+
+---
+
+## Structure du projet
 
 ```
 projet-infra-simple/
-├── Vagrantfile                    # Configuration principale Vagrant
+├── Vagrantfile
 ├── scripts/
-│   ├── provision-web-ubuntu.sh    # Script de provisioning web server
-│   └── provision-db-centos.sh     # Script de provisioning database server
-├── website/                       # Dossier synchronisé avec le web server
-├── database/
-│   ├── create-table.sql           # Création de la base de données
-│   └── insert-demo-data.sql       # Données de démonstration
-└── README.md                      # Ce fichier
+│   ├── provision-web-ubuntu.sh
+│   └── provision-db-centos.sh
+├── website/
+│   └── assets/ (images et CSS/JS du site)
+└── database/
+		├── create-table.sql
+		└── insert-demo-data.sql
 ```
 
-## ⚡ Démarrage rapide
+---
 
-### 1. Prérequis
+## Démarrage rapide
 
-```bash
-# Vérifier les installations
-vagrant --version
-VBoxManage --version
-```
+1) Prérequis :
 
-### 2. Cloner et préparer le projet
+- Vagrant
+- VirtualBox
 
-```bash
-# Créer la structure
-mkdir projet-infra-simple
-cd projet-infra-simple
+2) Démarrage des machines :
 
-# Créer les dossiers nécessaires
-mkdir -p scripts website database
-```
-
-### 3. Déployer l'infrastructure
-
-```bash
-# Démarrer toutes les machines
+```powershell
+# Depuis le répertoire du projet
 vagrant up
-
-# Ou démarrer une machine spécifique
+# Pour démarrer une machine seule
 vagrant up web-server
 vagrant up db-server
 ```
 
-## 🔧 Configuration des machines
+3) Re-provisionner si besoin :
 
-### Web Server (Ubuntu 22.04)
-- **Hostname** : web-server
-- **IP Privée** : 192.168.56.10
-- **IP Publique** : Automatique (bridge)
-- **Services** : Nginx, SSH
-- **Dossier synchronisé** : `./website` → `/var/www/html`
-
-### Database Server (CentOS 9)
-- **Hostname** : db-server  
-- **IP Privée** : 192.168.56.20
-- **Port Forwarding** : 3306 → 3307
-- **Services** : MySQL 8.0, SSH
-- **Base de données** : demo_db
-- **Utilisateur** : vagrant / vagrant123
-
-## 🌐 Accès aux services
-
-### Site Web
-```bash
-# Trouver l'IP publique de la machine web
-vagrant ssh web-server -c "hostname -I"
-
-# Accéder au site web
-# http://[IP_PUBLIQUE]
+```powershell
+vagrant provision db-server
+vagrant provision web-server
 ```
 
-### Base de Données
+---
 
-#### Depuis la machine physique (hôte)
-```bash
-# Connexion MySQL via port forwarding
-mysql -h localhost -P 3307 -u vagrant -pvagrant123
+## Détails des scripts de provisioning
 
-# Test rapide
-mysql -h localhost -P 3307 -u vagrant -pvagrant123 -e "USE demo_db; SELECT * FROM users;"
-```
+- `provision-web-ubuntu.sh` :
+	- installe Nginx et déploie la version statique du site dans `/var/www/html`.
+	- installe `mysql-client` (permet au web-server d'exécuter des tests vers la BDD).
+	- crée `/home/vagrant/test-db.sh` pour vérifier la connexion à la BDD depuis le web-server.
 
-#### Depuis la machine web
-```bash
-# Se connecter à la machine web
-vagrant ssh web-server
+- `provision-db-centos.sh` :
+	- installe MySQL et prend en charge le flux du mot de passe temporaire (si présent).
+	- définit un mot de passe root (par défaut `Root123!`, modifiable) et force `mysql_native_password` si nécessaire.
+	- crée la base `demo_db` et l'utilisateur `vagrant` (mot de passe par défaut `vagrant123`) et lui accorde les privilèges nécessaires;
+	- configure `bind-address = 0.0.0.0` pour accepter les connexions depuis la private network (VMs Vagrant) et redémarre MySQL;
+	- importe `create-table.sql` puis `insert-demo-data.sql` depuis `/tmp/database` si ces fichiers existent;
+	- crée `/home/vagrant/test-mysql.sh` pour vérification.
 
-# Tester la connexion à la DB
-mysql -h 192.168.56.20 -u vagrant -pvagrant123 -e "SHOW DATABASES;"
-```
+> Sécurité : les mots de passe sont codés pour la démonstration. Pour un usage réel, configurez des variables Vagrant ou stockez les secrets de manière sécurisée.
 
-#### Ping de la base de données
-```bash
-# Depuis la machine physique - ping vers l'IP privée
-ping 192.168.56.20
+---
 
-# Depuis la machine web
-vagrant ssh web-server
-ping 192.168.56.20
-```
+## Vérifications et tests
 
-## 🧪 Tests et vérifications
+- Vérifier l'état des machines :
 
-### Vérifier les services
-```bash
-# Status des machines
+```powershell
 vagrant status
-
-# Vérifier Nginx
-vagrant ssh web-server -c "sudo systemctl status nginx"
-
-# Vérifier MySQL
-vagrant ssh db-server -c "sudo systemctl status mysqld"
 ```
 
-### Tests de connectivité réseau
-```bash
-# Test du site web
-curl http://192.168.56.10
+- Tester la connexion MySQL depuis l'hôte (port forward 3307 -> 3306) :
 
-# Test ping entre machines
-vagrant ssh web-server -c "ping -c 3 192.168.56.20"
-
-# Test des ports
-nmap -p 3307 localhost  # Depuis l'hôte
+```powershell
+mysql -h localhost -P 3307 -u vagrant -pvagrant123 -e "SHOW DATABASES;"
 ```
 
-### Tests de la base de données
+- Depuis le web-server :
+
 ```bash
-# Test depuis l'hôte
-mysql -h localhost -P 3307 -u vagrant -pvagrant123 -e "SELECT COUNT(*) FROM demo_db.users;"
-
-# Test depuis la machine DB
-vagrant ssh db-server
-/home/vagrant/test-mysql.sh
-
-# Test depuis la machine Web
 vagrant ssh web-server
 /home/vagrant/test-db.sh
 ```
 
-## 🔄 Commandes de gestion
+- Depuis le db-server :
 
-### Gestion des machines
 ```bash
-# Démarrer
-vagrant up [nom-machine]
-
-# Arrêter
-vagrant halt [nom-machine]
-
-# Redémarrer
-vagrant reload [nom-machine]
-
-# Reprovisioner
-vagrant provision [nom-machine]
-
-# Détruire
-vagrant destroy [nom-machine]
-```
-
-### Connexions SSH
-```bash
-# SSH vers web server
-vagrant ssh web-server
-
-# SSH vers database server
 vagrant ssh db-server
-
-# Exécuter une commande sans se connecter
-vagrant ssh web-server -c "sudo nginx -t"
+/home/vagrant/test-mysql.sh
 ```
 
-## 🐛 Dépannage
+---
 
-### Problèmes courants
+## Sortie réseau (extrait du provisioning `web-server`)
 
-#### La machine ne démarre pas
-```bash
-# Vérifier VirtualBox
-VBoxManage list vms
+Le provisioning du `web-server` affiche des informations réseau utiles pour le débogage de la connectivité entre VMs. Exemple d'extrait :
 
-# Voir les logs détaillés
-vagrant up --debug
+```
+web-server: === Informations réseau ===
+		web-server: 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+		web-server:     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+		web-server:     inet 127.0.0.1/8 scope host lo
+		web-server:        valid_lft forever preferred_lft forever
+		web-server:     inet6 ::1/128 scope host
+		web-server:        valid_lft forever preferred_lft forever
+		web-server: 2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+		web-server:     link/ether 02:29:1e:73:1f:d5 brd ff:ff:ff:ff:ff:ff
+		web-server:     inet 10.0.2.15/24 metric 100 brd 10.0.2.255 scope global dynamic enp0s3
+		web-server:        valid_lft 86215sec preferred_lft 86215sec
+		web-server:     inet6 fd00::29:1eff:fe73:1fd5/64 scope global dynamic mngtmpaddr noprefixroute
+		web-server:        valid_lft 86216sec preferred_lft 14216sec
+		web-server:     inet6 fe80::29:1eff:fe73:1fd5/64 scope link
+		web-server:        valid_lft forever preferred_lft forever
+		web-server: 3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+		web-server:     link/ether 08:00:27:ba:39:65 brd ff:ff:ff:ff:ff:ff
+		web-server:     inet 192.168.11.119/24 metric 100 brd 192.168.11.255 scope global dynamic enp0s8
+		web-server:        valid_lft 85217sec preferred_lft 85217sec
+		web-server:     inet6 fe80::a00:27ff:feba:3965/64 scope link
+		web-server:        valid_lft forever preferred_lft forever
+		web-server: 4: enp0s9: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+		web-server:     link/ether 08:00:27:69:67:9e brd ff:ff:ff:ff:ff:ff
+		web-server:     inet 192.168.56.10/24 brd 192.168.56.255 scope global enp0s9
+		web-server:        valid_lft forever preferred_lft forever
+		web-server:     inet6 fe80::a00:27ff:fe69:679e/64 scope link
+		web-server:        valid_lft forever preferred_lft forever
+		web-server:
+		web-server: === Routes ===
+		web-server: default via 10.0.2.2 dev enp0s3 proto dhcp src 10.0.2.15 metric 100
+		web-server: default via 192.168.11.1 dev enp0s8 proto dhcp src 192.168.11.119 metric 100
+		web-server: 8.8.8.8 via 192.168.11.1 dev enp0s8 proto dhcp src 192.168.11.119 metric 100
+		web-server: 10.0.2.0/24 dev enp0s3 proto kernel scope link src 10.0.2.15 metric 100
+		web-server: 10.0.2.2 dev enp0s3 proto dhcp scope link src 10.0.2.15 metric 100
+		web-server: 10.0.2.3 dev enp0s3 proto dhcp scope link src 10.0.2.15 metric 100
+		web-server: 41.214.140.4 via 192.168.11.1 dev enp0s8 proto dhcp src 192.168.11.119 metric 100
+		web-server: 41.214.140.5 via 192.168.11.1 dev enp0s8 proto dhcp src 192.168.11.119 metric 100
+		web-server: 192.168.11.0/24 dev enp0s8 proto kernel scope link src 192.168.11.119 metric 100
+		web-server: 192.168.11.1 dev enp0s8 proto dhcp scope link src 192.168.11.119 metric 100
+		web-server: 192.168.56.0/24 dev enp0s9 proto kernel scope link src 192.168.56.10
+		web-server: Test de connectivité vers la base de données...
+		web-server: PING 192.168.56.20 (192.168.56.20) 56(84) bytes of data.
+		web-server: From 192.168.56.10 icmp_seq=1 Destination Host Unreachable
+		web-server: From 192.168.56.10 icmp_seq=2 Destination Host Unreachable
+		web-server: From 192.168.56.10 icmp_seq=3 Destination Host Unreachable
+		web-server:
+		web-server: --- 192.168.56.20 ping statistics ---
+		web-server: 3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 2052ms
+		web-server: pipe 3
+		web-server: Base de données pas encore accessible
+		web-server: 
+		web-server: === Web Server Ubuntu provisionné avec succès ===
+		web-server: - Nginx installé et configuré
+		web-server: - Site web disponible dans /var/www/html
+		web-server: - Accès web via l'IP publique de la machine
+		web-server: - Test DB disponible avec: /home/vagrant/test-db.sh
+		web-server: - IP privée: 192.168.56.10
+		web-server:
+		web-server: IP publique pour accès web: http://192.168.11.119
+		web-server: === Fin du provisioning Web Server ===
 ```
 
-#### Problème de réseau
-```bash
-# Vérifier les interfaces réseau
-vagrant ssh web-server -c "ip addr show"
+---
 
-# Redémarrer le réseau
+## Exemples de commandes utiles
+
+- Démarrer les machines : `vagrant up`
+- Re-provisionner : `vagrant provision db-server` ou `vagrant provision web-server`
+- Connecter SSH : `vagrant ssh web-server` / `vagrant ssh db-server`
+
+---
+
+
+
+
 vagrant reload
+
 ```
+
+
 
 #### MySQL inaccessible
+
 ```bash
-# Vérifier MySQL
-vagrant ssh db-server -c "sudo systemctl status mysqld"
-
-# Voir les logs MySQL
-vagrant ssh db-server -c "sudo tail -f /var/log/mysqld.log"
-
-# Redémarrer MySQL
-vagrant ssh db-server -c "sudo systemctl restart mysqld"
-```
-
-#### Port forwarding ne fonctionne pas
-```bash
-# Vérifier les ports
-netstat -tlnp | grep 3307
-
-# Tester la connectivité
-telnet localhost 3307
-```
-
-### Réinitialisation complète
-```bash
-# Détruire et recréer
-vagrant destroy -f
-vagrant up
-```
-
-## 📊 Informations techniques
-
-### Ressources allouées
-- **Web Server** : 1GB RAM, 1 vCPU
-- **Database Server** : 1GB RAM, 1 vCPU
-- **Disques** : 20GB allocation dynamique
-
-### Ports utilisés
-- **80** : HTTP (web server)
-- **22** : SSH (les deux machines)
-- **3306** : MySQL (internal)
-- **3307** : MySQL forwarded (hôte → db-server:3306)
-
-### Utilisateurs et mots de passe
-- **SSH** : vagrant/vagrant (clé automatique)
-- **MySQL root** : root/Root123!
-- **MySQL user** : vagrant/vagrant123
-
-## 🎯 Objectifs validés
-
-- ✅ Infrastructure multi-machines automatisée
-- ✅ Réseaux public et privé configurés
-- ✅ Web server accessible publiquement
-- ✅ Base de données accessible depuis l'hôte (port 3307)
-- ✅ Communication inter-machines fonctionnelle
-- ✅ Ping possible vers la base de données
-- ✅ Provisioning automatique
-- ✅ Synchronisation des dossiers
-
-## 📚 Ressources
-
-- [Documentation Vagrant](https://www.vagrantup.com/docs)
-- [VirtualBox Manual](https://www.virtualbox.org/manual/)
-- [MySQL 8.0 Documentation](https://dev.mysql.com/doc/refman/8.0/en/)
-
-## 🤝 Support
-
-En cas de problème, vérifiez :
-1. Les prérequis sont installés
-2. La virtualisation est activée dans le BIOS
-3. Les logs avec `vagrant up --debug`
-4. Les services avec `systemctl status`
